@@ -111,7 +111,6 @@ PHP;
             $this->info("Moved Update{$name}Request to {$updateRequestNew}");
         }
 
-// Reload namespaces
         function updateNamespace($filePath, $newNamespace): void
         {
             if (File::exists($filePath)) {
@@ -121,21 +120,60 @@ PHP;
             }
 
         }
-        function forceAuthorizeTrue($filePath): void
-        {
-            if (File::exists($filePath)) {
-                $content = File::get($filePath);
-                $content = preg_replace(
-                    '/public function authorize\(\): bool\s*\{\s*return false;\s*\}/',
-                    "public function authorize(): bool\n    {\n        return true;\n    }",
-                    $content
-                );
-                File::put($filePath, $content);
-            }
+
+
+        $storeRequestContent = <<<PHP
+<?php
+
+namespace App\Http\Requests\\{$name};
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class Store{$name}Request extends FormRequest
+{
+    public function rules(): array
+    {
+        return [
+            //
+        ];
+    }
+}
+PHP;
+
+        $updateRequestContent = <<<PHP
+<?php
+
+namespace App\Http\Requests\\{$name};
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class Update{$name}Request extends FormRequest
+{
+    public function rules(): array
+    {
+        return [
+            //
+        ];
+    }
+}
+PHP;
+
+        File::ensureDirectoryExists($customRequestDir);
+
+        File::put($storeRequestNew, $storeRequestContent);
+        File::put($updateRequestNew, $updateRequestContent);
+
+        $this->info("Created Store and Update Request files for {$name}.");
+
+        if (File::exists($storeRequestOld)) {
+            File::move($storeRequestOld, $storeRequestNew);
+            $this->info("Moved Store{$name}Request to {$storeRequestNew}");
         }
 
-        forceAuthorizeTrue($storeRequestNew);
-        forceAuthorizeTrue($updateRequestNew);
+        if (File::exists($updateRequestOld)) {
+            File::move($updateRequestOld, $updateRequestNew);
+            $this->info("Moved Update{$name}Request to {$updateRequestNew}");
+        }
 
         updateNamespace($storeRequestNew, "App\\Http\\Requests\\{$name}");
         updateNamespace($updateRequestNew, "App\\Http\\Requests\\{$name}");
