@@ -54,10 +54,10 @@ use App\Http\Requests\\{$name}\\Update{$name}Request;
 use App\Services\\{$name}Service;
 use Illuminate\Http\JsonResponse;
 
-readonly class {$name}Controller extends Controller
+class {$name}Controller extends Controller
 {
     public function __construct(
-        private {$name}Service \${$camelName}Service,
+        readonly private {$name}Service \${$camelName}Service,
     )
     {
         //
