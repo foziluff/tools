@@ -241,7 +241,8 @@ PHP;
 
     protected function requestBodyFromFormRequest(string $formRequestClass): array
     {
-        $instance = (new \ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
+//        $instance = (new \ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
+        $instance = new $formRequestClass;
 
         if (method_exists($instance, 'setContainer')) {
             $instance->setContainer(app())->setRedirector(app('redirect'));
@@ -321,9 +322,9 @@ PHP;
 
     public function addPropertyToNestedArray(&$properties, $field, $prop): void
     {
-        if (Str::contains($field, '.*.')) {
+        if (Str::contains($field, '.*')) {
             $arrayName = Str::before($field, '.*');
-            $nestedField = Str::after($field, '.*.');
+            $nestedField = trim(Str::after($field, '.*'), '.');
 
             if (!isset($properties[$arrayName])) {
                 $properties[$arrayName] = [
@@ -334,7 +335,10 @@ PHP;
                     ]
                 ];
             }
-
+            if ($nestedField == "") {
+                $properties[$arrayName]['items']['type'] = $prop['type'];
+                return;
+            }
             $this->addPropertyToNestedArray($properties[$arrayName]['items']['properties'], $nestedField, $prop);
         } else {
             $properties[$field] = $prop;
