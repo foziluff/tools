@@ -4,10 +4,14 @@ namespace Foziluff\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use ReflectionClass;
+use ReflectionException;
 use ReflectionMethod;
 use Symfony\Component\Yaml\Yaml;
+use Throwable;
 
 class GenerateSwaggerDocs extends Command
 {
@@ -239,16 +243,61 @@ PHP;
         return null;
     }
 
+    /**
+     * @throws ReflectionException
+     * @throws Throwable
+     */
     protected function requestBodyFromFormRequest(string $formRequestClass): array
     {
-//        $instance = (new \ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
-        $instance = new $formRequestClass;
+        $instance = (new ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
 
         if (method_exists($instance, 'setContainer')) {
             $instance->setContainer(app())->setRedirector(app('redirect'));
         }
 
-        $rules = method_exists($instance, 'rules') ? $instance->rules() : [];
+        $request = Request::create('', 'GET', []);
+        $instance->initialize(
+            $request->query->all(),
+            $request->request->all(),
+            $request->attributes->all(),
+            $request->cookies->all(),
+            $request->files->all(),
+            $request->server->all(),
+            $request->getContent()
+        );
+        $instance->setJson($request->json());
+
+        $rules = [];
+        $fakeInput = [];
+
+        try {
+            $rules = method_exists($instance, 'rules') ? $instance->rules() : [];
+        } catch (Throwable $e) {
+            if (preg_match('/Argument #\d+ \(\$(\w+)\) must be of type (\w+), null given/', $e->getMessage(), $m)) {
+                $param = $m[1];
+                $type = strtolower($m[2]);
+
+                $fakeInput[$param] = match ($type) {
+                    'string' => '',
+                    'int', 'integer', 'float', 'number' => 0,
+                    'bool', 'boolean' => false,
+                    'array' => [],
+                    default => null,
+                };
+
+                $instance->merge($fakeInput);
+
+                try {
+                    $rules = method_exists($instance, 'rules') ? $instance->rules() : [];
+                } catch (Throwable $e2) {
+                    report($e2);
+                    throw $e2;
+                }
+            } else {
+                report($e);
+                throw $e;
+            }
+        }
 
         $properties = [];
         $requiredFields = [];
@@ -427,7 +476,7 @@ PHP;
 
     protected function extractResponseCodes(string $controller, string $method): array
     {
-        $file = (new \ReflectionClass($controller))->getFileName();
+        $file = (new ReflectionClass($controller))->getFileName();
         $lines = file($file);
         $refMethod = new \ReflectionMethod($controller, $method);
 
@@ -494,7 +543,7 @@ PHP;
             return null;
         }
 
-        $instance = (new \ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
+        $instance = (new ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
 
         if (method_exists($instance, 'example')) {
             return $instance->example();
