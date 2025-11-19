@@ -297,6 +297,18 @@ PHP;
                     if ($type === 'string') $prop['maxLength'] = $value;
                     elseif (in_array($type, ['integer', 'number'])) $prop['maximum'] = $value;
                 }
+
+                if (Str::startsWith($rulePart, 'between:')) {
+                    [$min, $max] = array_map('intval', explode(',', Str::after($rulePart, 'between:')));
+
+                    if ($type === 'string') {
+                        $prop['minLength'] = $min;
+                        $prop['maxLength'] = $max;
+                    } elseif (in_array($type, ['integer', 'number'])) {
+                        $prop['minimum'] = $min;
+                        $prop['maximum'] = $max;
+                    }
+                }
             }
 
             $this->addPropertyToNestedArray($properties, $field, $prop);
