@@ -6,6 +6,8 @@ use Illuminate\Console\Command;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
+use ReflectionClass;
+use ReflectionException;
 use ReflectionMethod;
 use Symfony\Component\Yaml\Yaml;
 
@@ -13,6 +15,9 @@ class GenerateSwaggerDocs extends Command
 {
     protected $signature = 'swagger';
 
+    /**
+     * @throws ReflectionException
+     */
     public function handle(): void
     {
         $paths = [];
@@ -245,9 +250,12 @@ PHP;
         return null;
     }
 
+    /**
+     * @throws ReflectionException
+     */
     protected function requestBodyFromFormRequest(string $formRequestClass): array
     {
-        $instance = (new \ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
+        $instance = (new ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
 
         if (method_exists($instance, 'setContainer')) {
             $instance->setContainer(app())->setRedirector(app('redirect'));
@@ -299,7 +307,7 @@ PHP;
                 }
 
                 if (Str::startsWith($rulePart, 'between:')) {
-                    [$min, $max] = array_map('intval', explode(',', Str::after($rulePart, 'between:')));
+                    [$min, $max] = str($rulePart)->after('between:')->explode(',')->map(fn($v) => (int)$v);
 
                     if ($type === 'string') {
                         $prop['minLength'] = $min;
@@ -399,7 +407,7 @@ PHP;
     protected function guessType(array $rules): string
     {
         $rules = array_filter($rules, fn($r) => is_string($r));
-        $rules = array_map('strtolower', $rules);
+        $rules = collect($rules)->map(fn($r) => Str::lower($r))->all();
 
         if ($this->containsMime($rules)) {
             return 'file';
@@ -442,11 +450,14 @@ PHP;
         ];
     }
 
+    /**
+     * @throws ReflectionException
+     */
     protected function extractResponseCodes(string $controller, string $method): array
     {
-        $file = (new \ReflectionClass($controller))->getFileName();
+        $file = (new ReflectionClass($controller))->getFileName();
         $lines = file($file);
-        $refMethod = new \ReflectionMethod($controller, $method);
+        $refMethod = new ReflectionMethod($controller, $method);
 
         $start = $refMethod->getStartLine() - 1;
         $end = $refMethod->getEndLine() - 1;
@@ -455,7 +466,7 @@ PHP;
         $code = implode('', $codeLines);
 
         preg_match_all('/response\\(\\)->json\\(.*?,\\s*(\\d{3})\\)/s', $code, $responseMatches);
-        preg_match_all('/response\(\)->json\([^\)]*\)/', $code, $jsonCalls);
+        preg_match_all('/response\(\)->json\([^)]*\)/', $code, $jsonCalls);
         preg_match_all('/abort\((\d{3})\)/', $code, $abortMatches);
 
         $statusCodes = [];
@@ -503,6 +514,9 @@ PHP;
         return count($codes) > 0 ? $codes : ['200' => ['description' => 'OK']];
     }
 
+    /**
+     * @throws ReflectionException
+     */
     protected function exampleFromFormRequest(string $controllerClass, string $method): ?array
     {
         $formRequestClass = $this->getFormRequest($controllerClass, $method);
@@ -511,7 +525,7 @@ PHP;
             return null;
         }
 
-        $instance = (new \ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
+        $instance = (new ReflectionClass($formRequestClass))->newInstanceWithoutConstructor();
 
         if (method_exists($instance, 'example')) {
             return $instance->example();
