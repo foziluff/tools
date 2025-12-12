@@ -496,7 +496,20 @@ PHP;
         $codes = collect($statusCodes)
             ->filter()
             ->unique()
-            ->mapWithKeys(fn($code) => [$code => ['description' => "Response $code"]])
+            ->mapWithKeys(function ($code) {
+                return [
+                    $code => [
+                        'description' => "Response $code",
+                        'content' => [
+                            'application/json' => [
+                                'schema' => [
+                                    'type' => 'object',
+                                ]
+                            ]
+                        ]
+                    ]
+                ];
+            })
             ->toArray();
 
         $example = $this->exampleFromFormRequest($controller, $method);
