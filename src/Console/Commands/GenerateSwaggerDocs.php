@@ -553,7 +553,7 @@ PHP;
         $middlewares = $route->gatherMiddleware();
 
         foreach ($middlewares as $middleware) {
-            if (Str::contains($middleware, ['auth', 'auth:sanctum', 'auth:api', 'auth:jwt'])) {
+            if (Str::contains($middleware, ['auth', 'auth:sanctum', 'auth:api', 'auth:jwt', 'optional.sanctum'])) {
                 return true;
             }
         }
