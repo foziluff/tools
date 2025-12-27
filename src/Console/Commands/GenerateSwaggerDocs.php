@@ -10,6 +10,8 @@ use ReflectionClass;
 use ReflectionException;
 use ReflectionMethod;
 use Symfony\Component\Yaml\Yaml;
+use Illuminate\Validation\Rules\Enum as EnumRule;
+use UnitEnum;
 
 class GenerateSwaggerDocs extends Command
 {
@@ -268,7 +270,10 @@ PHP;
         $hasFile = false;
 
         foreach ($rules as $field => $rule) {
-            $parsed = is_array($rule) ? array_filter($rule, fn($r) => is_string($r)) : explode('|', $rule);
+//            $parsed = is_array($rule) ? array_filter($rule, fn($r) => is_string($r)) : explode('|', $rule);
+            $parsed = is_array($rule)
+                ? $rule
+                : explode('|', $rule);
 
             $type = $this->guessType($parsed);
 
@@ -294,6 +299,9 @@ PHP;
             }
 
             foreach ($parsed as $rulePart) {
+                if (!is_string($rulePart)) {
+                    continue;
+                }
                 if (Str::startsWith($rulePart, 'min:')) {
                     $value = (int)Str::after($rulePart, 'min:');
                     if ($type === 'string') $prop['minLength'] = $value;
@@ -398,10 +406,27 @@ PHP;
             if (is_string($rule) && Str::startsWith($rule, 'in:')) {
                 return explode(',', Str::after($rule, 'in:'));
             }
+
+            if ($rule instanceof EnumRule) {
+
+                $enumClass = (function () {
+
+                    /** @var class-string<UnitEnum> $this->type */
+
+                    return $this->type;
+
+                })->bindTo($rule, $rule::class)();
+
+                return array_map(
+                    fn ($case) => $case->value ?? $case->name,
+                    $enumClass::cases()
+                );
+            }
         }
 
         return null;
     }
+
 
 
     protected function guessType(array $rules): string
