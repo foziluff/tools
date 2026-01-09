@@ -17,16 +17,10 @@ class MakeAll extends Command
         $modelFilePath = app_path("Models/{$name}.php");
 
         if (!File::exists($modelFilePath)) {
-            Artisan::call("make:model {$name} -a");
+            Artisan::call("make:model {$name} -m");
             $this->info("Generated Laravel model & extras for {$name}");
-        } else {
-            exit("Model {$name} already exists");
-        }
 
-        $modelFilePath = app_path("Models/{$name}.php");
-
-
-        $modelContent = <<<PHP
+            $modelContent = <<<PHP
 <?php
 
 namespace App\Models;
@@ -39,12 +33,16 @@ class {$name} extends Model
 }
 PHP;
 
-        File::put($modelFilePath, $modelContent);
-        $this->info("Custom model structure applied to {$modelFilePath}");
+            File::put($modelFilePath, $modelContent);
+            $this->info("Custom model structure applied to {$modelFilePath}");
+        } else {
+            $this->warn("Model {$name} already exists, skipping...");
+        }
         $controllerPath = app_path("Http/Controllers/{$name}Controller.php");
         $camelName = lcfirst($name);
 
-        $controllerContent = <<<PHP
+        if (!File::exists($controllerPath)) {
+            $controllerContent = <<<PHP
 <?php
 
 namespace App\Http\Controllers;
@@ -90,8 +88,11 @@ class {$name}Controller extends Controller
 }
 PHP;
 
-        File::put($controllerPath, $controllerContent);
-        $this->info("Custom controller structure applied to {$controllerPath}");
+            File::put($controllerPath, $controllerContent);
+            $this->info("Custom controller structure applied to {$controllerPath}");
+        } else {
+            $this->warn("Controller {$name}Controller already exists, skipping...");
+        }
         $storeRequestOld = app_path("Http/Requests/Store{$name}Request.php");
         $updateRequestOld = app_path("Http/Requests/Update{$name}Request.php");
 
@@ -101,16 +102,6 @@ PHP;
         $storeRequestNew = "{$customRequestDir}/Store{$name}Request.php";
         $updateRequestNew = "{$customRequestDir}/Update{$name}Request.php";
 
-        if (File::exists($storeRequestOld)) {
-            File::move($storeRequestOld, $storeRequestNew);
-            $this->info("Moved Store{$name}Request to {$storeRequestNew}");
-        }
-
-        if (File::exists($updateRequestOld)) {
-            File::move($updateRequestOld, $updateRequestNew);
-            $this->info("Moved Update{$name}Request to {$updateRequestNew}");
-        }
-
         function updateNamespace($filePath, $newNamespace): void
         {
             if (File::exists($filePath)) {
@@ -118,11 +109,22 @@ PHP;
                 $content = preg_replace('/namespace App\\\Http\\\Requests;/', "namespace {$newNamespace};", $content);
                 File::put($filePath, $content);
             }
-
         }
 
+        if (File::exists($storeRequestOld) && !File::exists($storeRequestNew)) {
+            File::move($storeRequestOld, $storeRequestNew);
+            $this->info("Moved Store{$name}Request to {$storeRequestNew}");
+            updateNamespace($storeRequestNew, "App\\Http\\Requests\\{$name}");
+        }
 
-        $storeRequestContent = <<<PHP
+        if (File::exists($updateRequestOld) && !File::exists($updateRequestNew)) {
+            File::move($updateRequestOld, $updateRequestNew);
+            $this->info("Moved Update{$name}Request to {$updateRequestNew}");
+            updateNamespace($updateRequestNew, "App\\Http\\Requests\\{$name}");
+        }
+
+        if (!File::exists($storeRequestNew)) {
+            $storeRequestContent = <<<PHP
 <?php
 
 namespace App\Http\Requests\\{$name};
@@ -131,16 +133,23 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class Store{$name}Request extends FormRequest
 {
+    protected \$stopOnFirstFailure = true;
+
     public function rules(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 }
 PHP;
 
-        $updateRequestContent = <<<PHP
+            File::put($storeRequestNew, $storeRequestContent);
+            $this->info("Created Store{$name}Request file.");
+        } else {
+            $this->warn("Store{$name}Request already exists, skipping...");
+        }
+
+        if (!File::exists($updateRequestNew)) {
+            $updateRequestContent = <<<PHP
 <?php
 
 namespace App\Http\Requests\\{$name};
@@ -149,121 +158,63 @@ use Illuminate\Foundation\Http\FormRequest;
 
 class Update{$name}Request extends FormRequest
 {
+    protected \$stopOnFirstFailure = true;
+
     public function rules(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 }
 PHP;
 
-        File::ensureDirectoryExists($customRequestDir);
-
-        File::put($storeRequestNew, $storeRequestContent);
-        File::put($updateRequestNew, $updateRequestContent);
-
-        $this->info("Created Store and Update Request files for {$name}.");
-
-        if (File::exists($storeRequestOld)) {
-            File::move($storeRequestOld, $storeRequestNew);
-            $this->info("Moved Store{$name}Request to {$storeRequestNew}");
+            File::put($updateRequestNew, $updateRequestContent);
+            $this->info("Created Update{$name}Request file.");
+        } else {
+            $this->warn("Update{$name}Request already exists, skipping...");
         }
 
-        if (File::exists($updateRequestOld)) {
-            File::move($updateRequestOld, $updateRequestNew);
-            $this->info("Moved Update{$name}Request to {$updateRequestNew}");
-        }
-
-        updateNamespace($storeRequestNew, "App\\Http\\Requests\\{$name}");
-        updateNamespace($updateRequestNew, "App\\Http\\Requests\\{$name}");
-
-
-        // 2. Interface
-        $interfacePath = app_path("Contracts/Interfaces/Repositories/{$name}RepositoryInterface.php");
-        File::ensureDirectoryExists(dirname($interfacePath));
-        File::put($interfacePath, <<<PHP
-<?php
-
-namespace App\Contracts\Interfaces\Repositories;
-
-interface {$name}RepositoryInterface
-{
-}
-PHP);
-        $this->info("Created interface: {$interfacePath}");
-
-        // 3. Implementation
         $repoPath = app_path("Repositories/{$name}Repository.php");
-        File::ensureDirectoryExists(dirname($repoPath));
-        File::put($repoPath, <<<PHP
+        if (!File::exists($repoPath)) {
+            File::ensureDirectoryExists(dirname($repoPath));
+            File::put($repoPath, <<<PHP
 <?php
 
 namespace App\Repositories;
 
-use App\Contracts\Interfaces\Repositories\\{$name}RepositoryInterface;
-
-class {$name}Repository implements {$name}RepositoryInterface
+class {$name}Repository
 {
 }
-PHP);
-        $this->info("Created repository: {$repoPath}");
-        $camelName = lcfirst($name);
-        var_dump($camelName);
+PHP
+            );
+            $this->info("Created repository: {$repoPath}");
+        } else {
+            $this->warn("Repository {$name}Repository already exists, skipping...");
+        }
 
-        // 4. Service
+        $camelName = lcfirst($name);
         $servicePath = app_path("Services/{$name}Service.php");
-        File::ensureDirectoryExists(dirname($servicePath));
-        File::put($servicePath, <<<PHP
+        if (!File::exists($servicePath)) {
+            File::ensureDirectoryExists(dirname($servicePath));
+            File::put($servicePath, <<<PHP
 <?php
 
 namespace App\Services;
 
-use App\Contracts\Interfaces\Repositories\\{$name}RepositoryInterface;
+use App\Repositories\\{$name}Repository;
 
 readonly class {$name}Service
 {
     public function __construct(
-        private {$name}RepositoryInterface \${$camelName}Repository
+        private {$name}Repository \${$camelName}Repository
     )
     {
-        //
     }
 }
-PHP);
-        $this->info("Created service: {$servicePath}");
-
-        $providerPath = app_path('Providers/RepositoryServiceProvider.php');
-
-        if (!File::exists($providerPath)) {
-            Artisan::call("make:provider RepositoryServiceProvider");
-        }
-        $providerContent = File::get($providerPath);
-
-        $bindKey = "\\App\\Contracts\\Interfaces\\Repositories\\{$name}RepositoryInterface::class";
-        $bindValue = "\\App\\Repositories\\{$name}Repository::class";
-        $bindingEntry = "        {$bindKey} => {$bindValue},";
-
-        if (!str_contains($providerContent, $bindKey)) {
-            if (!str_contains($providerContent, 'public array $bindings')) {
-                $providerContent = preg_replace(
-                    '/class RepositoryServiceProvider extends ServiceProvider\s*\{/',
-                    "class RepositoryServiceProvider extends ServiceProvider\n{\n    /**\n     * The container bindings that should be registered.\n     */\n    public array \$bindings = [\n{$bindingEntry}\n    ];",
-                    $providerContent
-                );
-            } else {
-                $providerContent = preg_replace(
-                    '/public array \$bindings = \[\n/',
-                    "public array \$bindings = [\n{$bindingEntry}\n",
-                    $providerContent
-                );
-            }
-
-            File::put($providerPath, $providerContent);
-            $this->info("Binding added to \$bindings in RepositoryServiceProvider.");
+PHP
+            );
+            $this->info("Created service: {$servicePath}");
         } else {
-            $this->warn("Binding already exists in RepositoryServiceProvider.");
+            $this->warn("Service {$name}Service already exists, skipping...");
         }
     }
 }
-
